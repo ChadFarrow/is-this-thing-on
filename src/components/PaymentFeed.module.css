@@ -175,11 +175,10 @@
 
 .rowIncoming {
   border-left: 3px solid var(--incoming);
-  background: var(--incoming-dim);
 }
 
 .rowIncoming:hover {
-  background: rgba(0, 168, 112, 0.1);
+  background: var(--surface2);
 }
 
 .rowIncoming .destAlias {
@@ -312,22 +311,20 @@
 /* Group rows */
 .groupRow {
   border-left: 3px solid var(--accent);
-  background: rgba(0, 120, 255, 0.03);
   font-weight: 600;
 }
 
 .groupRow:hover {
-  background: rgba(0, 120, 255, 0.07);
+  background: var(--surface2);
 }
 
 .groupRowFailed {
   border-left: 3px solid var(--fail);
-  background: rgba(217, 48, 80, 0.04);
   font-weight: 600;
 }
 
 .groupRowFailed:hover {
-  background: var(--fail-dim);
+  background: var(--surface2);
 }
 
 .ratioOk {
