@@ -122,14 +122,20 @@ function TransactionRow({ tx }) {
   const isSuccess = state === 'succeeded'
 
   useEffect(() => {
+    // Try V4V TLV name first
+    const v4vName = parseV4VName(tx.metadata)
+    if (v4vName) {
+      setDestAlias(v4vName)
+    }
+
     const pubkey = decodeBolt11(tx.invoice)
     if (pubkey) {
       setDestPubkey(pubkey)
-      lookupNodeAlias(pubkey).then(setDestAlias)
+      if (!v4vName) lookupNodeAlias(pubkey).then(setDestAlias)
     } else if (tx.metadata?.destination) {
       const ksPubkey = tx.metadata.destination
       setDestPubkey(ksPubkey)
-      lookupNodeAlias(ksPubkey).then(setDestAlias)
+      if (!v4vName) lookupNodeAlias(ksPubkey).then(setDestAlias)
     }
   }, [tx.invoice, tx.metadata])
 
@@ -206,6 +212,19 @@ function DetailRow({ label, value, mono, error, highlight }) {
       </span>
     </div>
   )
+}
+
+function parseV4VName(metadata) {
+  try {
+    const tlv = metadata?.tlv_records?.find((r) => r.type === 7629169)
+    if (!tlv?.value) return null
+    const json = JSON.parse(
+      tlv.value.replace(/../g, (h) => String.fromCharCode(parseInt(h, 16)))
+    )
+    return json.name || null
+  } catch {
+    return null
+  }
 }
 
 function normalizeState(state) {
