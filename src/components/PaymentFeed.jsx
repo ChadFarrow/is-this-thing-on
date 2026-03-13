@@ -24,18 +24,60 @@ export default function PaymentFeed({ transactions, lastUpdated }) {
   const filtered = useMemo(() => {
     return transactions.filter((tx) => {
       const s = normalizeState(tx.state)
-      const matchState =
-        filter === 'all' ||
-        (filter === 'failed' && s === 'failed') ||
-        (filter === 'succeeded' && s === 'succeeded') ||
-        (filter === 'pending' && s === 'pending')
-      const matchType =
-        typeFilter === 'all' ||
-        (typeFilter === 'outgoing' && tx.type === 'outgoing') ||
-        (typeFilter === 'incoming' && tx.type === 'incoming')
+      const matchState = filter === 'all' || filter === s
+      const matchType = typeFilter === 'all' || typeFilter === tx.type
       return matchState && matchType
     })
   }, [transactions, filter, typeFilter])
+
+  const grouped = useMemo(() => {
+    const groups = new Map()
+    const ungrouped = []
+
+    filtered.forEach((tx) => {
+      const v4v = parseV4V(tx.metadata)
+      if (!v4v || !v4v.action) {
+        ungrouped.push({ type: 'tx', tx })
+        return
+      }
+      const timeBucket = Math.floor((tx.created_at || 0) / 30)
+      const key = `${v4v.action}|${v4v.podcast || ''}|${v4v.episode || ''}|${timeBucket}`
+
+      if (!groups.has(key)) {
+        groups.set(key, { type: 'group', key, v4v, splits: [], time: tx.created_at })
+      }
+      groups.get(key).splits.push({ tx, v4v })
+    })
+
+    const result = []
+    groups.forEach((group) => {
+      if (group.splits.length === 1) {
+        result.push({ type: 'tx', tx: group.splits[0].tx, sortTime: group.time })
+      } else {
+        let succeeded = 0, failed = 0, totalAmt = 0, totalFees = 0
+        for (const s of group.splits) {
+          const st = normalizeState(s.tx.state)
+          if (st === 'succeeded') succeeded++
+          else if (st === 'failed') failed++
+          totalAmt += s.tx.amount || 0
+          totalFees += s.tx.fees_paid || 0
+        }
+        group.succeededCount = succeeded
+        group.failedCount = failed
+        group.totalAmount = totalAmt
+        group.totalFees = totalFees
+        group.sortTime = group.time
+        result.push(group)
+      }
+    })
+    ungrouped.forEach((item) => {
+      item.sortTime = item.tx.created_at
+      result.push(item)
+    })
+
+    result.sort((a, b) => (b.sortTime || 0) - (a.sortTime || 0))
+    return result
+  }, [filtered])
 
   if (transactions.length === 0) {
     return (
@@ -91,7 +133,7 @@ export default function PaymentFeed({ transactions, lastUpdated }) {
       <div className={styles.table}>
         <div className={styles.thead}>
           <div className={styles.col} style={{ width: '70px' }}>STATE</div>
-          <div className={styles.col} style={{ width: '60px' }}>TYPE</div>
+          <div className={styles.col} style={{ width: '80px' }}>TYPE</div>
           <div className={styles.col} style={{ flex: 1, minWidth: 0 }}>DESTINATION</div>
           <div className={styles.col} style={{ flex: 1, minWidth: 0 }}>DESCRIPTION</div>
           <div className={styles.col} style={{ width: '90px', textAlign: 'right' }}>AMOUNT</div>
@@ -99,16 +141,91 @@ export default function PaymentFeed({ transactions, lastUpdated }) {
           <div className={styles.col} style={{ width: '130px', textAlign: 'right' }}>TIME</div>
         </div>
         <div className={styles.tbody}>
-          {filtered.length === 0 ? (
+          {grouped.length === 0 ? (
             <div className={styles.noResults}>No transactions match this filter.</div>
           ) : (
-            filtered.map((tx, i) => (
-              <TransactionRow key={tx.payment_hash ?? i} tx={tx} />
-            ))
+            grouped.map((item, i) =>
+              item.type === 'group' ? (
+                <GroupRow key={item.key} group={item} />
+              ) : (
+                <TransactionRow key={item.tx.payment_hash ?? i} tx={item.tx} />
+              )
+            )
           )}
         </div>
       </div>
     </div>
+  )
+}
+
+function GroupRow({ group }) {
+  const [expanded, setExpanded] = useState(false)
+  const { v4v, splits, succeededCount, failedCount, totalAmount, totalFees } = group
+  const total = splits.length
+  const allOk = succeededCount === total
+  const hasFails = failedCount > 0
+
+  const actionIcon = v4v.action === 'boost' ? '🚀' : v4v.action === 'stream' ? '🎵' : '⚡'
+  const time = group.time ? new Date(group.time * 1000).toLocaleTimeString() : '—'
+  const totalSats = v4v.value_msat_total ? msatsToSats(v4v.value_msat_total) : msatsToSats(totalAmount)
+
+  const ratioClass = allOk ? styles.ratioOk : hasFails ? styles.ratioFail : styles.ratioPending
+  const groupRowClass = hasFails ? styles.groupRowFailed : styles.groupRow
+
+  return (
+    <>
+      <div className={`${styles.row} ${groupRowClass}`} onClick={() => setExpanded(!expanded)}>
+        <div className={styles.cell} style={{ width: '70px' }}>
+          <span className={`${styles.stateTag} ${ratioClass}`}>
+            {succeededCount}/{total} {allOk ? '✓' : hasFails ? '!' : '…'}
+          </span>
+        </div>
+        <div className={styles.cell} style={{ width: '80px' }}>
+          <span className={styles.typeTag}>{actionIcon} {v4v.action?.toUpperCase() || '—'}</span>
+        </div>
+        <div className={`${styles.cell} ${styles.destCell}`} style={{ flex: 1, minWidth: 0 }}>
+          <span className={styles.destAlias}>{v4v.podcast || '—'}</span>
+        </div>
+        <div className={`${styles.cell} ${styles.descCell}`} style={{ flex: 1, minWidth: 0 }}>
+          {v4v.message || v4v.episode || '—'}
+        </div>
+        <div className={styles.cell} style={{ width: '90px', textAlign: 'right' }}>
+          <span className={styles.amount}>{totalSats} <span className={styles.unit}>sats</span></span>
+        </div>
+        <div className={styles.cell} style={{ width: '70px', textAlign: 'right', color: 'var(--text-dim)' }}>
+          {totalFees > 0 ? msatsToSats(totalFees) : '—'}
+        </div>
+        <div className={styles.cell} style={{ width: '130px', textAlign: 'right', color: 'var(--text-dim)', fontSize: '11px' }}>
+          {expanded ? '▾' : '▸'} {time}
+        </div>
+      </div>
+
+      {expanded && (
+        <div className={styles.groupDetail}>
+          <div className={styles.groupMeta}>
+            {v4v.sender_name && <span>From: <strong>{v4v.sender_name}</strong></span>}
+            {v4v.app_name && <span>via {v4v.app_name}</span>}
+            {v4v.episode && <span>Episode: {v4v.episode}</span>}
+          </div>
+          <div className={styles.splitList}>
+            {splits.map((s, i) => {
+              const state = normalizeState(s.tx.state)
+              const stateLabel = state === 'succeeded' ? '✓' : state === 'failed' ? 'FAIL' : 'PEND'
+              const stateClass = state === 'failed' ? styles.stateFail : state === 'succeeded' ? styles.stateOk : styles.statePend
+              return (
+                <div key={s.tx.payment_hash ?? i} className={`${styles.splitRow} ${state === 'failed' ? styles.splitRowFailed : ''}`}>
+                  <span className={`${styles.stateTag} ${stateClass}`} style={{ width: '50px', textAlign: 'center' }}>{stateLabel}</span>
+                  <span className={styles.splitName}>{s.v4v?.name || '—'}</span>
+                  <span className={styles.splitAmount}>{msatsToSats(s.tx.amount)} sats</span>
+                  <span className={styles.splitFees}>{s.tx.fees_paid !== undefined ? `${msatsToSats(s.tx.fees_paid)} fee` : ''}</span>
+                  {s.tx.error_message && <span className={styles.splitError}>{s.tx.error_message}</span>}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+    </>
   )
 }
 
@@ -139,13 +256,19 @@ function TransactionRow({ tx }) {
     }
   }, [tx.invoice, tx.metadata])
 
-  const rowClass = isFailed ? styles.rowFailed : isSuccess ? styles.rowSuccess : styles.rowPending
+  const isIncoming = tx.type === 'incoming'
+  const rowClass = isFailed ? styles.rowFailed : isIncoming ? styles.rowIncoming : isSuccess ? styles.rowSuccess : styles.rowPending
   const stateLabel = isSuccess ? '✓' : isFailed ? 'FAIL' : 'PEND'
   const stateClass = isFailed ? styles.stateFail : isSuccess ? styles.stateOk : styles.statePend
 
-  const desc = tx.description || tx.memo || '—'
+  const rssPayment = parseRssPayment(tx.description || tx.memo)
+  const desc = rssPayment?.message || tx.description || tx.memo || '—'
   const time = tx.created_at ? new Date(tx.created_at * 1000).toLocaleTimeString() : '—'
   const destDisplay = destAlias ?? (destPubkey ? shortPubkey(destPubkey) : null)
+
+  const typeLabel = rssPayment
+    ? `${rssPayment.action === 'boost' ? '🚀' : '🎵'} ${rssPayment.action.toUpperCase()}`
+    : tx.type === 'outgoing' ? '↑ OUT' : '↓ IN'
 
   return (
     <>
@@ -153,8 +276,8 @@ function TransactionRow({ tx }) {
         <div className={styles.cell} style={{ width: '70px' }}>
           <span className={`${styles.stateTag} ${stateClass}`}>{stateLabel}</span>
         </div>
-        <div className={styles.cell} style={{ width: '60px' }}>
-          <span className={styles.typeTag}>{tx.type === 'outgoing' ? '↑ OUT' : '↓ IN'}</span>
+        <div className={styles.cell} style={{ width: '80px' }}>
+          <span className={styles.typeTag}>{typeLabel}</span>
         </div>
         <div className={`${styles.cell} ${styles.destCell}`} style={{ flex: 1, minWidth: 0 }}>
           {destDisplay ? (
@@ -214,17 +337,29 @@ function DetailRow({ label, value, mono, error, highlight }) {
   )
 }
 
-function parseV4VName(metadata) {
+function parseV4V(metadata) {
   try {
     const tlv = metadata?.tlv_records?.find((r) => r.type === 7629169)
     if (!tlv?.value) return null
     const json = JSON.parse(
       tlv.value.replace(/../g, (h) => String.fromCharCode(parseInt(h, 16)))
     )
-    return json.name || null
+    return json
   } catch {
     return null
   }
+}
+
+function parseV4VName(metadata) {
+  const v4v = parseV4V(metadata)
+  return v4v?.name || null
+}
+
+function parseRssPayment(description) {
+  if (!description) return null
+  const match = description.match(/^rss::payment::(boost|stream)\s+(https?:\/\/\S+)\s*(.*)$/)
+  if (!match) return null
+  return { action: match[1], url: match[2], message: match[3] || null }
 }
 
 function normalizeState(state) {

@@ -173,6 +173,19 @@
   border-left: 3px solid transparent;
 }
 
+.rowIncoming {
+  border-left: 3px solid var(--incoming);
+  background: var(--incoming-dim);
+}
+
+.rowIncoming:hover {
+  background: rgba(0, 168, 112, 0.1);
+}
+
+.rowIncoming .destAlias {
+  color: var(--incoming);
+}
+
 .rowPending {
   border-left: 3px solid var(--pending);
   background: rgba(85, 85, 221, 0.04);
@@ -294,6 +307,119 @@
 .detailHighlight {
   color: var(--accent);
   font-weight: 700;
+}
+
+/* Group rows */
+.groupRow {
+  border-left: 3px solid var(--accent);
+  background: rgba(0, 120, 255, 0.03);
+  font-weight: 600;
+}
+
+.groupRow:hover {
+  background: rgba(0, 120, 255, 0.07);
+}
+
+.groupRowFailed {
+  border-left: 3px solid var(--fail);
+  background: rgba(217, 48, 80, 0.04);
+  font-weight: 600;
+}
+
+.groupRowFailed:hover {
+  background: var(--fail-dim);
+}
+
+.ratioOk {
+  color: var(--success);
+  background: var(--success-dim);
+}
+
+.ratioFail {
+  color: var(--fail);
+  background: var(--fail-dim);
+}
+
+.ratioPending {
+  color: var(--pending);
+  background: var(--pending-dim);
+}
+
+.groupDetail {
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 18px;
+  animation: fadeIn 0.2s ease forwards;
+}
+
+.groupMeta {
+  display: flex;
+  gap: 16px;
+  font-size: 11px;
+  color: var(--text-dim);
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+
+.splitList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.splitRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 8px;
+  font-size: 11px;
+  border-radius: 2px;
+}
+
+.splitRow:hover {
+  background: var(--surface2);
+}
+
+.splitRowFailed {
+  background: rgba(217, 48, 80, 0.04);
+}
+
+.splitName {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+  font-weight: 500;
+}
+
+.splitAmount {
+  width: 80px;
+  text-align: right;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+.splitFees {
+  width: 60px;
+  text-align: right;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+.splitError {
+  color: var(--fail);
+  font-size: 10px;
+  margin-left: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 200px;
 }
 
 /* Empty state */

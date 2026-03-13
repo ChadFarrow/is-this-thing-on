@@ -22,6 +22,8 @@
   --fail-dim: rgba(217, 48, 80, 0.08);
   --pending: #5555dd;
   --pending-dim: rgba(85, 85, 221, 0.08);
+  --incoming: #00a870;
+  --incoming-dim: rgba(0, 168, 112, 0.05);
   --font-mono: 'Space Mono', monospace;
   --font-display: 'Syne', sans-serif;
 }

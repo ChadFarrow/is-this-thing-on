@@ -5,8 +5,11 @@ A lightweight real-time payment monitor for AlbyHub (or any NWC-compatible Light
 ## Features
 
 - Connects via **NWC (Nostr Wallet Connect)** — no API keys, just your NWC string
-- Polls `list_transactions` every 5 seconds
-- Highlights **failed payments** prominently
+- Real-time notifications via `subscribeNotifications`; falls back to polling
+- **V4V split grouping** — boost and stream splits are grouped into collapsible rows showing success/fail ratio (e.g. "8/8 ✓" or "6/8 !")
+- Expand a group to see individual splits with recipient names, amounts, fees, and error messages
+- Highlights **failed payments** prominently — both individual and within groups
+- Incoming payments (e.g. Fountain boosts) parsed to show action type and message
 - Filter by state (failed / succeeded / pending) and direction (outgoing / incoming)
 - Click any transaction to expand full details including error messages and payment hash
 - Your NWC secret never leaves your browser
@@ -37,6 +40,7 @@ npm run dev
 ## Tech
 
 - Vite + React
-- nostr-tools (NIP-04 encryption, event signing)
-- NIP-47 (Nostr Wallet Connect protocol)
+- @getalby/sdk (NWCClient, NIP-47)
+- light-bolt11-decoder (invoice decoding)
+- V4V TLV parsing (keysend type 7629169)
 - Zero backend — runs entirely in the browser

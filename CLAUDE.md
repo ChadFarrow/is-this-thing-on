@@ -25,11 +25,15 @@ npm run preview   # Preview production build locally
 | `src/useNWC.js` | React hook: connects via @getalby/sdk NWCClient, subscribes to notifications, manages transactions state |
 | `src/lightning.js` | BOLT11 decoding helpers + node pubkey → alias lookup (mempool.space) |
 | `src/components/ConnectionForm.jsx` | NWC string input + connect/disconnect, accepts `savedUri` prop |
-| `src/components/PaymentFeed.jsx` | Transaction list with filters (state, direction), V4V TLV name parsing, expandable details |
+| `src/components/PaymentFeed.jsx` | Transaction list with filters, V4V split grouping, expandable details |
 | `src/App.jsx` | Root component, localStorage persistence, auto-connect |
 
 ## Key Patterns
-- **V4V name resolution**: `parseV4VName()` in PaymentFeed.jsx extracts the `name` field from TLV 7629169 to show split recipient names (e.g. "Hash Power Music") instead of node aliases (e.g. "klnd0")
+- **V4V TLV parsing**: `parseV4V()` returns the full decoded TLV 7629169 object; `parseV4VName()` is a convenience wrapper for the `name` field
+- **Split grouping**: V4V payments are grouped by `action|podcast|episode|timeBucket(30s)`. Groups show as collapsible rows with success/fail ratio (e.g. "8/8 ✓"). Only payments with matching V4V TLV metadata are grouped — plain keysends without TLV stay ungrouped (this is correct; no guessing)
+- **`GroupRow` vs `TransactionRow`**: groups of 2+ V4V splits render as `GroupRow` (collapsible, shows splits); single payments render as `TransactionRow`
+- **RSS payment parsing**: `parseRssPayment()` extracts action/message from `rss::payment::boost` descriptions on incoming payments (e.g. Fountain boosts)
+- **Incoming vs outgoing styling**: incoming payments get green accent (border + destination text), outgoing keeps default orange
 - **Alby hosted NWC**: `list_transactions` times out on Alby's relay but notifications work fine; code handles this gracefully
 
 ## Deploy
