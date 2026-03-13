@@ -134,7 +134,7 @@ function TransactionRow({ tx }) {
   }, [tx.invoice, tx.metadata])
 
   const rowClass = isFailed ? styles.rowFailed : isSuccess ? styles.rowSuccess : styles.rowPending
-  const stateLabel = isSuccess ? 'OK' : isFailed ? 'FAIL' : 'PEND'
+  const stateLabel = isSuccess ? '✓' : isFailed ? 'FAIL' : 'PEND'
   const stateClass = isFailed ? styles.stateFail : isSuccess ? styles.stateOk : styles.statePend
 
   const desc = tx.description || tx.memo || '—'

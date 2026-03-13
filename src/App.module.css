@@ -15,8 +15,8 @@
     0deg,
     transparent,
     transparent 2px,
-    rgba(0, 0, 0, 0.03) 2px,
-    rgba(0, 0, 0, 0.03) 4px
+    rgba(0, 0, 0, 0.015) 2px,
+    rgba(0, 0, 0, 0.015) 4px
   );
   z-index: 100;
 }
@@ -70,7 +70,7 @@
   align-items: center;
   gap: 6px;
   background: var(--fail-dim);
-  border: 1px solid rgba(255, 68, 102, 0.3);
+  border: 1px solid rgba(217, 48, 80, 0.25);
   border-radius: 3px;
   padding: 4px 10px;
   font-size: 11px;

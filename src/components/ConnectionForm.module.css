@@ -71,7 +71,7 @@
   font-size: 12px;
   color: var(--fail);
   background: var(--fail-dim);
-  border: 1px solid rgba(255, 68, 102, 0.2);
+  border: 1px solid rgba(217, 48, 80, 0.2);
   border-radius: 3px;
   padding: 8px 12px;
 }
@@ -106,8 +106,8 @@
 .spinner {
   width: 10px;
   height: 10px;
-  border: 2px solid rgba(0,0,0,0.3);
-  border-top-color: #000;
+  border: 2px solid rgba(0,0,0,0.15);
+  border-top-color: #333;
   border-radius: 50%;
   display: inline-block;
   animation: spin 0.7s linear infinite;

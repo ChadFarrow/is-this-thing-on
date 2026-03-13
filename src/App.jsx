@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNWC } from './useNWC'
 import ConnectionForm from './components/ConnectionForm'
 import PaymentFeed from './components/PaymentFeed'
@@ -8,17 +8,26 @@ const POLL_INTERVAL = 5000
 
 export default function App() {
   const { status, error, transactions, lastUpdated, connect, disconnect } = useNWC(null, POLL_INTERVAL)
-  const [nwcUri, setNwcUri] = useState(null)
+  const [nwcUri, setNwcUri] = useState(() => localStorage.getItem('nwc_uri'))
 
   const handleConnect = (uri) => {
     setNwcUri(uri)
+    localStorage.setItem('nwc_uri', uri)
     connect(uri)
   }
 
   const handleDisconnect = () => {
     disconnect()
     setNwcUri(null)
+    localStorage.removeItem('nwc_uri')
   }
+
+  // Auto-connect if we have a saved URI
+  useEffect(() => {
+    if (nwcUri && status === 'disconnected') {
+      connect(nwcUri)
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const failCount = transactions.filter((tx) => {
     const s = tx.state?.toLowerCase()
@@ -34,7 +43,7 @@ export default function App() {
         <div className={styles.logo}>
           <span className={styles.bolt}>⚡</span>
           <div>
-            <div className={styles.title}>NWC PAYMENT MONITOR</div>
+            <div className={styles.title}>IS THIS THING ON</div>
             <div className={styles.subtitle}>AlbyHub · Podcasting 2.0 · Value4Value</div>
           </div>
         </div>
@@ -46,7 +55,7 @@ export default function App() {
             </div>
           )}
           <div className={styles.pollBadge}>
-            POLL {POLL_INTERVAL / 1000}s
+            {status === 'connected' ? 'LIVE' : 'OFFLINE'}
           </div>
         </div>
       </header>
@@ -57,6 +66,7 @@ export default function App() {
           onDisconnect={handleDisconnect}
           status={status}
           error={error}
+          savedUri={nwcUri}
         />
 
         <section className={styles.section}>

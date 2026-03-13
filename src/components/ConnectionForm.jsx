@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import styles from './ConnectionForm.module.css'
 
-export default function ConnectionForm({ onConnect, onDisconnect, status, error }) {
-  const [uri, setUri] = useState('')
+export default function ConnectionForm({ onConnect, onDisconnect, status, error, savedUri }) {
+  const [uri, setUri] = useState(savedUri || '')
   const [showUri, setShowUri] = useState(false)
   const isConnected = status === 'connected'
   const isConnecting = status === 'connecting'

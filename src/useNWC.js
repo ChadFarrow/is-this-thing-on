@@ -1,29 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { generateSecretKey, getPublicKey, nip04, finalizeEvent } from 'nostr-tools'
-
-/**
- * Parse a NWC URI into its components.
- * Format: nostr+walletconnect://<walletPubkey>?relay=<relay>&secret=<secret>
- */
-export function parseNWCUri(uri) {
-  try {
-    const cleaned = uri.trim()
-    if (!cleaned.startsWith('nostr+walletconnect://')) {
-      throw new Error('Not a valid NWC URI')
-    }
-    const withoutScheme = cleaned.replace('nostr+walletconnect://', '')
-    const [walletPubkey, queryString] = withoutScheme.split('?')
-    const params = new URLSearchParams(queryString)
-    const relay = params.get('relay')
-    const secret = params.get('secret')
-    if (!walletPubkey || !relay || !secret) {
-      throw new Error('Missing required NWC URI fields')
-    }
-    return { walletPubkey, relay, secret }
-  } catch (e) {
-    throw new Error(`Failed to parse NWC URI: ${e.message}`)
-  }
-}
+import { NWCClient } from '@getalby/sdk'
 
 /**
  * Format msats to a readable sats string.
@@ -37,158 +13,94 @@ export function msatsToSats(msats) {
 }
 
 /**
- * useNWC — manages a single persistent WebSocket connection to an NWC relay,
- * sends list_transactions requests, and returns parsed payment data.
+ * useNWC — connects via @getalby/sdk NWC client,
+ * subscribes to real-time payment notifications, and falls back to polling.
  */
 export function useNWC(nwcUri, pollIntervalMs = 5000) {
-  const [status, setStatus] = useState('disconnected') // disconnected | connecting | connected | error
+  const [status, setStatus] = useState('disconnected')
   const [error, setError] = useState(null)
   const [transactions, setTransactions] = useState([])
   const [lastUpdated, setLastUpdated] = useState(null)
 
-  const wsRef = useRef(null)
+  const clientRef = useRef(null)
   const pollTimerRef = useRef(null)
-  const parsedRef = useRef(null)
-  const pendingRequests = useRef({}) // eventId -> resolve
+  const unsubRef = useRef(null)
 
   const disconnect = useCallback(() => {
     clearInterval(pollTimerRef.current)
-    if (wsRef.current) {
-      wsRef.current.onclose = null
-      wsRef.current.close()
-      wsRef.current = null
+    if (unsubRef.current) {
+      unsubRef.current()
+      unsubRef.current = null
+    }
+    if (clientRef.current) {
+      clientRef.current.close()
+      clientRef.current = null
     }
     setStatus('disconnected')
-  }, [])
-
-  const sendListTransactions = useCallback(async () => {
-    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
-    const { walletPubkey, secret } = parsedRef.current
-
-    const secretKeyBytes = hexToBytes(secret)
-    const clientPubkey = getPublicKey(secretKeyBytes)
-
-    const requestPayload = JSON.stringify({
-      method: 'list_transactions',
-      params: { limit: 50 },
-    })
-
-    const encrypted = await nip04.encrypt(secret, walletPubkey, requestPayload)
-
-    const event = finalizeEvent(
-      {
-        kind: 23194,
-        created_at: Math.floor(Date.now() / 1000),
-        tags: [['p', walletPubkey]],
-        content: encrypted,
-      },
-      secretKeyBytes
-    )
-
-    // Subscribe for the response
-    const subId = randomHex(8)
-    const msg = JSON.stringify([
-      'REQ',
-      subId,
-      {
-        kinds: [23195],
-        authors: [walletPubkey],
-        '#e': [event.id],
-        since: Math.floor(Date.now() / 1000) - 10,
-      },
-    ])
-
-    pendingRequests.current[event.id] = { subId, clientPubkey }
-
-    wsRef.current.send(JSON.stringify(['EVENT', event]))
-    wsRef.current.send(msg)
+    setTransactions([])
   }, [])
 
   const connect = useCallback(async (uri) => {
     try {
       setStatus('connecting')
       setError(null)
-      const parsed = parseNWCUri(uri)
-      parsedRef.current = parsed
 
-      const ws = new WebSocket(parsed.relay)
-      wsRef.current = ws
+      const client = new NWCClient({ nostrWalletConnectUrl: uri })
+      clientRef.current = client
 
-      ws.onopen = () => {
-        setStatus('connected')
-        sendListTransactions()
-        pollTimerRef.current = setInterval(sendListTransactions, pollIntervalMs)
-      }
+      // Test connectivity with get_info
+      const info = await client.getInfo()
+      console.log('[NWC] Connected to', info.alias || 'wallet')
+      setStatus('connected')
 
-      ws.onmessage = async (evt) => {
+      // Try list_transactions first (works on self-hosted AlbyHub)
+      const hasList = info.methods?.includes('list_transactions')
+      const hasNotifications = info.notifications?.length > 0
+
+      // Try to load history via list_transactions
+      if (hasList) {
         try {
-          const msg = JSON.parse(evt.data)
-          if (!Array.isArray(msg)) return
-
-          const [type, , event] = msg
-          if (type !== 'EVENT' || !event || event.kind !== 23195) return
-
-          // Find which request this is a response to
-          const eTag = event.tags.find((t) => t[0] === 'e')
-          if (!eTag) return
-          const requestEventId = eTag[1]
-          const pending = pendingRequests.current[requestEventId]
-          if (!pending) return
-
-          // Decrypt
-          const { secret } = parsedRef.current
-          const decrypted = await nip04.decrypt(secret, event.pubkey, event.content)
-          const response = JSON.parse(decrypted)
-
-          if (response.error) {
-            console.warn('NWC error response:', response.error)
-            return
-          }
-
-          const txs = response.result?.transactions ?? []
-          setTransactions(txs)
+          const resp = await client.listTransactions({ limit: 50 })
+          setTransactions(resp.transactions ?? [])
           setLastUpdated(new Date())
-
-          // Clean up subscription
-          ws.send(JSON.stringify(['CLOSE', pending.subId]))
-          delete pendingRequests.current[requestEventId]
         } catch (e) {
-          console.error('Error processing NWC message:', e)
+          // Fall through to notifications
         }
       }
 
-      ws.onerror = (e) => {
-        setStatus('error')
-        setError('WebSocket connection failed. Check your relay URL.')
+      if (hasNotifications) {
+        const unsub = await client.subscribeNotifications(
+          (notification) => {
+            const tx = notification.notification
+            if (tx) {
+              setTransactions((prev) => {
+                // Deduplicate by payment_hash
+                const exists = prev.find(
+                  (t) => t.payment_hash === tx.payment_hash
+                )
+                if (exists) return prev
+                const updated = [tx, ...prev]
+                return updated.slice(0, 200) // keep last 200
+              })
+              setLastUpdated(new Date())
+            }
+          },
+          ['payment_received', 'payment_sent']
+        )
+        unsubRef.current = unsub
       }
 
-      ws.onclose = () => {
-        setStatus('disconnected')
-        clearInterval(pollTimerRef.current)
+      if (!hasList && !hasNotifications) {
+        setError('Wallet does not support transaction listing or notifications. Try a connection with more permissions.')
       }
     } catch (e) {
+      console.error('[NWC] Connection error:', e)
       setStatus('error')
       setError(e.message)
     }
-  }, [sendListTransactions, pollIntervalMs])
+  }, [pollIntervalMs])
 
-  // Cleanup on unmount
   useEffect(() => () => disconnect(), [disconnect])
 
   return { status, error, transactions, lastUpdated, connect, disconnect }
-}
-
-// Helpers
-function hexToBytes(hex) {
-  const bytes = new Uint8Array(hex.length / 2)
-  for (let i = 0; i < hex.length; i += 2) {
-    bytes[i / 2] = parseInt(hex.slice(i, i + 2), 16)
-  }
-  return bytes
-}
-
-function randomHex(bytes) {
-  return Array.from(crypto.getRandomValues(new Uint8Array(bytes)))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('')
 }
