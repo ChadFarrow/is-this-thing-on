@@ -34,19 +34,45 @@ export default function PaymentFeed({ transactions, lastUpdated }) {
     const groups = new Map()
     const ungrouped = []
 
+    // Group by V4V metadata: use ts when present, fall back to time-proximity clustering
+    const needsClustering = new Map()
     filtered.forEach((tx) => {
       const v4v = parseV4V(tx.metadata)
       if (!v4v || !v4v.action) {
         ungrouped.push({ type: 'tx', tx })
         return
       }
-      const timeBucket = Math.floor((tx.created_at || 0) / 30)
-      const key = `${v4v.action}|${v4v.podcast || ''}|${v4v.episode || ''}|${timeBucket}`
-
-      if (!groups.has(key)) {
-        groups.set(key, { type: 'group', key, v4v, splits: [], time: tx.created_at })
+      if (v4v.ts) {
+        // ts present (e.g. boosts): group directly by metadata
+        const key = `${v4v.action}|${v4v.podcast || ''}|${v4v.episode || ''}|${v4v.ts}`
+        if (!groups.has(key)) groups.set(key, { type: 'group', key, v4v, splits: [], time: 0 })
+        const group = groups.get(key)
+        group.splits.push({ tx, v4v })
+        group.time = Math.max(group.time, tx.created_at || 0)
+      } else {
+        // no ts (e.g. streams): collect for time-proximity clustering
+        const contextKey = `${v4v.action}|${v4v.podcast || ''}|${v4v.episode || ''}`
+        if (!needsClustering.has(contextKey)) needsClustering.set(contextKey, [])
+        needsClustering.get(contextKey).push({ tx, v4v })
       }
-      groups.get(key).splits.push({ tx, v4v })
+    })
+
+    // Time-proximity clustering for payments without ts
+    needsClustering.forEach((items, contextKey) => {
+      items.sort((a, b) => (a.tx.created_at || 0) - (b.tx.created_at || 0))
+      let cluster = [items[0]]
+      for (let i = 1; i < items.length; i++) {
+        const gap = (items[i].tx.created_at || 0) - (items[i - 1].tx.created_at || 0)
+        if (gap <= 60) {
+          cluster.push(items[i])
+        } else {
+          const key = `${contextKey}|${cluster[0].tx.created_at}`
+          groups.set(key, { type: 'group', key, v4v: cluster[0].v4v, splits: cluster, time: cluster[cluster.length - 1].tx.created_at })
+          cluster = [items[i]]
+        }
+      }
+      const key = `${contextKey}|${cluster[0].tx.created_at}`
+      groups.set(key, { type: 'group', key, v4v: cluster[0].v4v, splits: cluster, time: cluster[cluster.length - 1].tx.created_at })
     })
 
     const result = []
@@ -167,7 +193,7 @@ function GroupRow({ group }) {
 
   const actionIcon = v4v.action === 'boost' ? '🚀' : v4v.action === 'stream' ? '🎵' : '⚡'
   const time = group.time ? new Date(group.time * 1000).toLocaleTimeString() : '—'
-  const totalSats = v4v.value_msat_total ? msatsToSats(v4v.value_msat_total) : msatsToSats(totalAmount)
+  const totalSats = msatsToSats(totalAmount)
 
   const ratioClass = allOk ? styles.ratioOk : hasFails ? styles.ratioFail : styles.ratioPending
   const groupRowClass = hasFails ? styles.groupRowFailed : styles.groupRow

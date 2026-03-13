@@ -1,5 +1,21 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { NWCClient } from '@getalby/sdk'
+
+const TX_STORAGE_KEY = 'nwc_transactions'
+const TX_MAX_STORED = 500
+
+function loadStoredTx() {
+  try {
+    const raw = localStorage.getItem(TX_STORAGE_KEY)
+    return raw ? JSON.parse(raw) : []
+  } catch { return [] }
+}
+
+function saveTx(transactions) {
+  try {
+    localStorage.setItem(TX_STORAGE_KEY, JSON.stringify(transactions.slice(0, TX_MAX_STORED)))
+  } catch { /* storage full — silently skip */ }
+}
 
 /**
  * Format msats to a readable sats string.
@@ -19,8 +35,16 @@ export function msatsToSats(msats) {
 export function useNWC(nwcUri, pollIntervalMs = 5000) {
   const [status, setStatus] = useState('disconnected')
   const [error, setError] = useState(null)
-  const [transactions, setTransactions] = useState([])
+  const [transactions, setTransactionsRaw] = useState(loadStoredTx)
   const [lastUpdated, setLastUpdated] = useState(null)
+
+  const setTransactions = useCallback((update) => {
+    setTransactionsRaw((prev) => {
+      const next = typeof update === 'function' ? update(prev) : update
+      saveTx(next)
+      return next
+    })
+  }, [])
 
   const clientRef = useRef(null)
   const pollTimerRef = useRef(null)
@@ -37,7 +61,6 @@ export function useNWC(nwcUri, pollIntervalMs = 5000) {
       clientRef.current = null
     }
     setStatus('disconnected')
-    setTransactions([])
   }, [])
 
   const connect = useCallback(async (uri) => {
@@ -61,7 +84,14 @@ export function useNWC(nwcUri, pollIntervalMs = 5000) {
       if (hasList) {
         try {
           const resp = await client.listTransactions({ limit: 50 })
-          setTransactions(resp.transactions ?? [])
+          const fetched = resp.transactions ?? []
+          setTransactions((prev) => {
+            const byHash = new Map(prev.map((t) => [t.payment_hash, t]))
+            for (const t of fetched) byHash.set(t.payment_hash, t)
+            return [...byHash.values()]
+              .sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+              .slice(0, TX_MAX_STORED)
+          })
           setLastUpdated(new Date())
         } catch (e) {
           // Fall through to notifications
@@ -80,7 +110,7 @@ export function useNWC(nwcUri, pollIntervalMs = 5000) {
                 )
                 if (exists) return prev
                 const updated = [tx, ...prev]
-                return updated.slice(0, 200) // keep last 200
+                return updated.slice(0, TX_MAX_STORED)
               })
               setLastUpdated(new Date())
             }
