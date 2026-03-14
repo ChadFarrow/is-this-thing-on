@@ -3,6 +3,8 @@
   border: 1px solid var(--border);
   border-radius: 4px;
   padding: 20px 24px;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .header {
@@ -33,12 +35,13 @@
 
 .input {
   width: 100%;
+  max-width: 100%;
   background: var(--bg);
   border: 1px solid var(--border-bright);
   border-radius: 3px;
   padding: 10px 40px 10px 12px;
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 16px;
   color: var(--text);
   outline: none;
   transition: border-color 0.15s;
@@ -158,7 +161,7 @@
   }
 
   .input {
-    font-size: 14px;
+    font-size: 16px;
     padding: 12px 40px 12px 12px;
   }
 
