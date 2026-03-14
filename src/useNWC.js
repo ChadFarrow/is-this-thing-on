@@ -123,6 +123,9 @@ export function useNWC(nwcUri, pollIntervalMs = 5000) {
           (notification) => {
             const tx = notification.notification
             if (tx) {
+              if (tx.state?.toLowerCase() === 'failed') {
+                console.warn('[NWC] Failed payment received via notification:', tx.payment_hash, tx)
+              }
               setTransactions((prev) => {
                 // Deduplicate by payment_hash
                 const exists = prev.find(
