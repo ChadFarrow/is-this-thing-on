@@ -129,6 +129,22 @@
   font-family: var(--font-mono);
 }
 
+.colState { width: 70px; }
+.colType { width: 80px; }
+.colDest { flex: 1; min-width: 0; }
+.colDesc { flex: 1; min-width: 0; }
+.colAmount { width: 90px; text-align: right; }
+.colFees { width: 70px; text-align: right; }
+.colTime { width: 130px; text-align: right; }
+
+.cellState { width: 70px; }
+.cellType { width: 80px; }
+.cellDest { flex: 1; min-width: 0; }
+.cellDesc { flex: 1; min-width: 0; }
+.cellAmount { width: 90px; text-align: right; }
+.cellFees { width: 70px; text-align: right; color: var(--text-dim); }
+.cellTime { width: 130px; text-align: right; color: var(--text-dim); font-size: 11px; }
+
 .tbody {
   max-height: calc(100vh - 380px);
   overflow-y: auto;
@@ -440,4 +456,122 @@
 .emptyHint {
   font-size: 11px;
   color: var(--text-muted);
+}
+
+/* Mobile responsive */
+@media (max-width: 600px) {
+  .toolbar {
+    padding: 10px 0;
+    gap: 8px;
+  }
+
+  .filters {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  .filterBtn {
+    padding: 8px 10px;
+    font-size: 10px;
+  }
+
+  .right {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .thead {
+    padding: 8px 10px;
+  }
+
+  .row {
+    padding: 10px;
+    gap: 6px;
+  }
+
+  /* Hide type, description, and fees columns on mobile */
+  .colType,
+  .colDesc,
+  .colFees,
+  .cellType,
+  .cellDesc,
+  .cellFees {
+    display: none;
+  }
+
+  .colState,
+  .cellState {
+    width: 52px;
+  }
+
+  .colDest,
+  .cellDest {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .colAmount,
+  .cellAmount {
+    width: auto;
+    flex-shrink: 0;
+  }
+
+  .colTime,
+  .cellTime {
+    width: auto;
+    flex-shrink: 0;
+    font-size: 10px;
+  }
+
+  .tbody {
+    max-height: calc(100vh - 320px);
+  }
+
+  .detail {
+    padding: 10px 12px;
+  }
+
+  .detailLabel {
+    width: 80px;
+    font-size: 10px;
+  }
+
+  .detailRow {
+    gap: 8px;
+    font-size: 11px;
+  }
+
+  .groupDetail {
+    padding: 8px 10px;
+  }
+
+  .groupMeta {
+    gap: 8px;
+    font-size: 10px;
+  }
+
+  .splitRow {
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 6px 4px;
+  }
+
+  .splitAmount {
+    width: auto;
+  }
+
+  .splitFees {
+    width: auto;
+  }
+
+  .splitError {
+    max-width: 100%;
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .failBanner {
+    font-size: 11px;
+    padding: 8px 10px;
+  }
 }
