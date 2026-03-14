@@ -259,12 +259,14 @@ function TransactionRow({ tx }) {
   const [expanded, setExpanded] = useState(false)
   const [destAlias, setDestAlias] = useState(null)
   const [destPubkey, setDestPubkey] = useState(null)
+  const [decoded, setDecoded] = useState(false)
 
   const state = normalizeState(tx.state)
   const isFailed = state === 'failed'
   const isSuccess = state === 'succeeded'
 
   useEffect(() => {
+    let cancelled = false
     // Try V4V TLV name first
     const v4vName = parseV4VName(tx.metadata)
     if (v4vName) {
@@ -274,12 +276,29 @@ function TransactionRow({ tx }) {
     const pubkey = decodeBolt11(tx.invoice)
     if (pubkey) {
       setDestPubkey(pubkey)
-      if (!v4vName) lookupNodeAlias(pubkey).then(setDestAlias)
+      if (!v4vName) {
+        lookupNodeAlias(pubkey).then((alias) => {
+          if (!cancelled) { setDestAlias(alias); setDecoded(true) }
+        })
+      } else {
+        setDecoded(true)
+      }
     } else if (tx.metadata?.destination) {
       const ksPubkey = tx.metadata.destination
       setDestPubkey(ksPubkey)
-      if (!v4vName) lookupNodeAlias(ksPubkey).then(setDestAlias)
+      if (!v4vName) {
+        lookupNodeAlias(ksPubkey).then((alias) => {
+          if (!cancelled) { setDestAlias(alias); setDecoded(true) }
+        })
+      } else {
+        setDecoded(true)
+      }
+    } else {
+      // No invoice destination and no metadata destination — nothing to decode
+      setDecoded(true)
     }
+
+    return () => { cancelled = true }
   }, [tx.invoice, tx.metadata])
 
   const isIncoming = tx.type === 'incoming'
@@ -308,7 +327,7 @@ function TransactionRow({ tx }) {
         <div className={`${styles.cell} ${styles.destCell} ${styles.cellDest}`}>
           {destDisplay ? (
             <span className={styles.destAlias} title={destPubkey}>{destDisplay}</span>
-          ) : tx.type === 'outgoing' ? (
+          ) : !decoded && tx.type === 'outgoing' ? (
             <span className={styles.destUnknown}>decoding…</span>
           ) : (
             <span className={styles.destUnknown}>—</span>
