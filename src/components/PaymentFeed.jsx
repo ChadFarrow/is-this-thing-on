@@ -188,7 +188,7 @@ export default function PaymentFeed({ transactions, lastUpdated, onClear }) {
             </span>
           )}
           {onClear && transactions.length > 0 && (
-            <button className={styles.clearBtn} onClick={onClear} title="Clear transaction history">
+            <button className={styles.clearBtn} onClick={() => { if (window.confirm('Clear all transaction history?')) onClear() }} title="Clear transaction history">
               CLEAR
             </button>
           )}
