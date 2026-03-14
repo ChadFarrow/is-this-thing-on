@@ -5,7 +5,7 @@ import styles from './PaymentFeed.module.css'
 
 const STATE_FILTERS = ['all', 'failed', 'succeeded', 'pending']
 
-export default function PaymentFeed({ transactions, lastUpdated }) {
+export default function PaymentFeed({ transactions, lastUpdated, onClear }) {
   const [filter, setFilter] = useState('all')
   const [typeFilter, setTypeFilter] = useState('all')
   const [rssMetaMap, setRssMetaMap] = useState(new Map())
@@ -186,6 +186,11 @@ export default function PaymentFeed({ transactions, lastUpdated }) {
             <span className={styles.lastUpdated}>
               updated {lastUpdated.toLocaleTimeString()}
             </span>
+          )}
+          {onClear && transactions.length > 0 && (
+            <button className={styles.clearBtn} onClick={onClear} title="Clear transaction history">
+              CLEAR
+            </button>
           )}
         </div>
       </div>

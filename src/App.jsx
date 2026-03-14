@@ -7,7 +7,7 @@ import styles from './App.module.css'
 const POLL_INTERVAL = 5000
 
 export default function App() {
-  const { status, error, transactions, lastUpdated, connect, disconnect } = useNWC(null, POLL_INTERVAL)
+  const { status, error, transactions, lastUpdated, connect, disconnect, clearTransactions } = useNWC(null, POLL_INTERVAL)
   const [nwcUri, setNwcUri] = useState(() => localStorage.getItem('nwc_uri'))
 
   const handleConnect = (uri) => {
@@ -80,6 +80,7 @@ export default function App() {
             transactions={transactions}
             lastUpdated={lastUpdated}
             pollInterval={POLL_INTERVAL}
+            onClear={clearTransactions}
           />
         </section>
       </main>

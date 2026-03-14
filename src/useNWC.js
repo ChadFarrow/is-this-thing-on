@@ -161,7 +161,12 @@ export function useNWC(nwcUri, pollIntervalMs = 5000) {
     }
   }, [pollIntervalMs])
 
+  const clearTransactions = useCallback(() => {
+    setTransactions([])
+    setLastUpdated(null)
+  }, [setTransactions])
+
   useEffect(() => () => disconnect(), [disconnect])
 
-  return { status, error, transactions, lastUpdated, connect, disconnect }
+  return { status, error, transactions, lastUpdated, connect, disconnect, clearTransactions }
 }
