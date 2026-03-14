@@ -273,7 +273,13 @@ function TransactionRow({ tx }) {
       setDestAlias(v4vName)
     }
 
+    // Try multiple sources for the destination pubkey
     const pubkey = decodeBolt11(tx.invoice)
+      || tx.metadata?.destination
+      || tx.metadata?.pubkey
+      || tx.destination
+      || null
+
     if (pubkey) {
       setDestPubkey(pubkey)
       if (!v4vName) {
@@ -283,18 +289,11 @@ function TransactionRow({ tx }) {
       } else {
         setDecoded(true)
       }
-    } else if (tx.metadata?.destination) {
-      const ksPubkey = tx.metadata.destination
-      setDestPubkey(ksPubkey)
-      if (!v4vName) {
-        lookupNodeAlias(ksPubkey).then((alias) => {
-          if (!cancelled) { setDestAlias(alias); setDecoded(true) }
-        })
-      } else {
-        setDecoded(true)
-      }
     } else {
-      // No invoice destination and no metadata destination — nothing to decode
+      // Log first few missing destinations to help debug
+      if (tx.type === 'outgoing' && !v4vName) {
+        console.debug('[PaymentFeed] No destination found for tx:', tx.payment_hash, { metadata: tx.metadata, hasInvoice: !!tx.invoice, keys: Object.keys(tx) })
+      }
       setDecoded(true)
     }
 
@@ -309,7 +308,10 @@ function TransactionRow({ tx }) {
   const rssPayment = parseRssPayment(tx.description || tx.memo)
   const desc = rssPayment?.message || tx.description || tx.memo || '—'
   const time = tx.created_at ? new Date(tx.created_at * 1000).toLocaleTimeString() : '—'
-  const destDisplay = destAlias ?? (destPubkey ? shortPubkey(destPubkey) : null)
+  // Fallback: extract hostname from rss::payment description if no destination resolved
+  const destDisplay = destAlias
+    ?? (destPubkey ? shortPubkey(destPubkey) : null)
+    ?? (rssPayment?.url ? new URL(rssPayment.url).hostname.replace(/^www\./, '') : null)
 
   const typeLabel = rssPayment
     ? `${rssPayment.action === 'boost' ? '🚀' : '🎵'} ${rssPayment.action.toUpperCase()}`
