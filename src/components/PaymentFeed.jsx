@@ -290,10 +290,7 @@ function TransactionRow({ tx }) {
         setDecoded(true)
       }
     } else {
-      // Log first few missing destinations to help debug
-      if (tx.type === 'outgoing' && !v4vName) {
-        console.debug('[PaymentFeed] No destination found for tx:', tx.payment_hash, { metadata: tx.metadata, hasInvoice: !!tx.invoice, keys: Object.keys(tx) })
-      }
+      // No destination available — expected for keysends without V4V TLV metadata
       setDecoded(true)
     }
 
