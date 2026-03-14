@@ -80,22 +80,42 @@ export function useNWC(nwcUri, pollIntervalMs = 5000) {
       const hasList = info.methods?.includes('list_transactions')
       const hasNotifications = info.notifications?.length > 0
 
+      // Merge fetched transactions into state, deduplicating by payment_hash
+      const mergeTx = (fetched) => {
+        setTransactions((prev) => {
+          const byHash = new Map(prev.map((t) => [t.payment_hash, t]))
+          let changed = false
+          for (const t of fetched) {
+            if (!byHash.has(t.payment_hash)) changed = true
+            byHash.set(t.payment_hash, t)
+          }
+          if (!changed && fetched.length === 0) return prev
+          return [...byHash.values()]
+            .sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+            .slice(0, TX_MAX_STORED)
+        })
+        setLastUpdated(new Date())
+      }
+
       // Try to load history via list_transactions
       if (hasList) {
         try {
           const resp = await client.listTransactions({ limit: 50 })
-          const fetched = resp.transactions ?? []
-          setTransactions((prev) => {
-            const byHash = new Map(prev.map((t) => [t.payment_hash, t]))
-            for (const t of fetched) byHash.set(t.payment_hash, t)
-            return [...byHash.values()]
-              .sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
-              .slice(0, TX_MAX_STORED)
-          })
-          setLastUpdated(new Date())
+          mergeTx(resp.transactions ?? [])
         } catch (e) {
           // Fall through to notifications
         }
+
+        // Poll periodically to catch transactions missed while backgrounded
+        clearInterval(pollTimerRef.current)
+        pollTimerRef.current = setInterval(async () => {
+          try {
+            const resp = await client.listTransactions({ limit: 50 })
+            mergeTx(resp.transactions ?? [])
+          } catch (e) {
+            console.warn('[NWC] Poll error:', e.message)
+          }
+        }, pollIntervalMs)
       }
 
       if (hasNotifications) {
