@@ -252,7 +252,7 @@ function GroupRow({ group }) {
           <span className={styles.typeTag}>{actionIcon} {v4v.action?.toUpperCase() || '—'}</span>
         </div>
         <div className={`${styles.cell} ${styles.destCell} ${styles.cellDest}`}>
-          <span className={styles.destAlias}>{v4v.rssMeta ? (v4v.sender_name || v4v.podcast || '—') : (v4v.podcast || '—')}</span>
+          <span className={styles.destAlias}>{v4v.rssMeta ? (v4v.rssMeta.recipient_name || v4v.podcast || '—') : (v4v.podcast || '—')}</span>
         </div>
         <div className={`${styles.cell} ${styles.descCell} ${styles.cellDesc}`}>
           {v4v.rssMeta ? (v4v.episode || v4v.message || '—') : (v4v.message || v4v.episode || '—')}
@@ -351,7 +351,7 @@ function TransactionRow({ tx }) {
     fetchRssPaymentMeta(rssPayment.url).then((meta) => {
       if (!cancelled && meta) {
         setRssMeta(meta)
-        if (!destAlias && meta.sender_name) setDestAlias(meta.sender_name)
+        if (!destAlias && meta.recipient_name) setDestAlias(meta.recipient_name)
       }
     })
     return () => { cancelled = true }
