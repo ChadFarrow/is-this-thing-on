@@ -86,10 +86,11 @@ export function useNWC(nwcUri, pollIntervalMs = 5000) {
           const byHash = new Map(prev.map((t) => [t.payment_hash, t]))
           let changed = false
           for (const t of fetched) {
-            if (!byHash.has(t.payment_hash)) changed = true
+            const existing = byHash.get(t.payment_hash)
+            if (!existing || existing.state !== t.state) changed = true
             byHash.set(t.payment_hash, t)
           }
-          if (!changed && fetched.length === 0) return prev
+          if (!changed) return prev
           return [...byHash.values()]
             .sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
             .slice(0, TX_MAX_STORED)
@@ -127,11 +128,16 @@ export function useNWC(nwcUri, pollIntervalMs = 5000) {
                 console.warn('[NWC] Failed payment received via notification:', tx.payment_hash, tx)
               }
               setTransactions((prev) => {
-                // Deduplicate by payment_hash
-                const exists = prev.find(
+                const idx = prev.findIndex(
                   (t) => t.payment_hash === tx.payment_hash
                 )
-                if (exists) return prev
+                if (idx >= 0) {
+                  // Update existing transaction (e.g. pending → failed/settled)
+                  if (prev[idx].state === tx.state) return prev
+                  const updated = [...prev]
+                  updated[idx] = tx
+                  return updated
+                }
                 const updated = [tx, ...prev]
                 return updated.slice(0, TX_MAX_STORED)
               })
