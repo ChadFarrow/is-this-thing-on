@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { NWCClient } from '@getalby/sdk'
 
 const TX_STORAGE_KEY = 'nwc_transactions'
+const TX_CLEARED_AT_KEY = 'nwc_cleared_at'
 const TX_MAX_STORED = 500
 
 function loadStoredTx() {
@@ -49,6 +50,7 @@ export function useNWC(nwcUri, pollIntervalMs = 5000) {
   const clientRef = useRef(null)
   const pollTimerRef = useRef(null)
   const unsubRef = useRef(null)
+  const clearedAtRef = useRef(Number(localStorage.getItem(TX_CLEARED_AT_KEY)) || 0)
 
   const disconnect = useCallback(() => {
     clearInterval(pollTimerRef.current)
@@ -82,10 +84,12 @@ export function useNWC(nwcUri, pollIntervalMs = 5000) {
 
       // Merge fetched transactions into state, deduplicating by payment_hash
       const mergeTx = (fetched) => {
+        const cutoff = clearedAtRef.current
         setTransactions((prev) => {
           const byHash = new Map(prev.map((t) => [t.payment_hash, t]))
           let changed = false
           for (const t of fetched) {
+            if (cutoff && (t.created_at || 0) <= cutoff) continue
             const existing = byHash.get(t.payment_hash)
             if (!existing || existing.state !== t.state) changed = true
             byHash.set(t.payment_hash, t)
@@ -126,6 +130,8 @@ export function useNWC(nwcUri, pollIntervalMs = 5000) {
           (notification) => {
             const tx = notification.notification
             if (tx) {
+              const cutoff = clearedAtRef.current
+              if (cutoff && (tx.created_at || 0) <= cutoff) return
               if (tx.state?.toLowerCase() === 'failed') {
                 console.warn('[NWC] Failed payment received via notification:', tx.payment_hash, tx)
               }
@@ -162,6 +168,9 @@ export function useNWC(nwcUri, pollIntervalMs = 5000) {
   }, [pollIntervalMs])
 
   const clearTransactions = useCallback(() => {
+    const now = Math.floor(Date.now() / 1000)
+    clearedAtRef.current = now
+    localStorage.setItem(TX_CLEARED_AT_KEY, String(now))
     setTransactions([])
     setLastUpdated(null)
   }, [setTransactions])
