@@ -233,7 +233,7 @@ function GroupRow({ group }) {
   const allOk = succeededCount === total
   const hasFails = failedCount > 0
 
-  const actionIcon = v4v.action === 'boost' ? '🚀' : v4v.action === 'stream' ? '🎵' : '⚡'
+  const icon = actionIcon(v4v.action)
   const time = group.time ? new Date(group.time * 1000).toLocaleTimeString() : '—'
   const totalSats = msatsToSats(totalAmount)
 
@@ -249,7 +249,7 @@ function GroupRow({ group }) {
           </span>
         </div>
         <div className={`${styles.cell} ${styles.cellType}`}>
-          <span className={styles.typeTag}>{actionIcon} {v4v.action?.toUpperCase() || '—'}</span>
+          <span className={styles.typeTag}>{icon} {v4v.action?.toUpperCase() || '—'}</span>
         </div>
         <div className={`${styles.cell} ${styles.destCell} ${styles.cellDest}`}>
           <span className={styles.destAlias}>{v4v.podcast || '—'}</span>
@@ -275,17 +275,16 @@ function GroupRow({ group }) {
             {v4v.app_name && <span>via {v4v.app_name}{v4v.rssMeta?.app_version ? ` v${v4v.rssMeta.app_version}` : ''}</span>}
             {v4v.podcast && <span>Podcast: {v4v.podcast}</span>}
             {v4v.episode && <span>Episode: {v4v.episode}</span>}
-            {v4v.rssMeta?.position != null && <span>Position: {Math.floor(v4v.rssMeta.position / 60)}:{String(v4v.rssMeta.position % 60).padStart(2, '0')}</span>}
+            {v4v.rssMeta?.position != null && <span>Position: {formatPosition(v4v.rssMeta.position)}</span>}
             {v4v.message && <span>Message: {v4v.message}</span>}
           </div>
           <div className={styles.splitList}>
             {splits.map((s, i) => {
-              const state = normalizeState(s.tx.state)
-              const stateLabel = state === 'succeeded' ? '✓' : state === 'failed' ? 'FAIL' : 'PEND'
-              const stateClass = state === 'failed' ? styles.stateFail : state === 'succeeded' ? styles.stateOk : styles.statePend
+              const st = normalizeState(s.tx.state)
+              const { label: stLabel, cls: stCls } = stateDisplay(st)
               return (
-                <div key={s.tx.payment_hash ?? i} className={`${styles.splitRow} ${state === 'failed' ? styles.splitRowFailed : ''}`}>
-                  <span className={`${styles.stateTag} ${stateClass}`} style={{ width: '50px', textAlign: 'center' }}>{stateLabel}</span>
+                <div key={s.tx.payment_hash ?? i} className={`${styles.splitRow} ${st === 'failed' ? styles.splitRowFailed : ''}`}>
+                  <span className={`${styles.stateTag} ${stCls}`} style={{ width: '50px', textAlign: 'center' }}>{stLabel}</span>
                   <span className={styles.splitName}>{s.v4v?.name || s.v4v?.rssMeta?.recipient_name || '—'}</span>
                   <span className={styles.splitAmount}>{msatsToSats(s.tx.amount)} sats</span>
                   <span className={styles.splitFees}>{s.tx.fees_paid !== undefined ? `${msatsToSats(s.tx.fees_paid)} fee` : ''}</span>
@@ -360,18 +359,15 @@ function TransactionRow({ tx }) {
     fetchRssPaymentMeta(rssPayment.url).then((meta) => {
       if (!cancelled && meta) {
         setRssMeta(meta)
-        if (!destAlias) {
-          const name = isIncoming ? (meta.sender_name || meta.podcast) : meta.recipient_name
-          if (name) setDestAlias(name)
-        }
+        const name = isIncoming ? (meta.sender_name || meta.podcast) : meta.recipient_name
+        if (name) setDestAlias((prev) => prev ?? name)
       }
     })
     return () => { cancelled = true }
-  }, [rssPayment?.url])
+  }, [rssPayment?.url, isIncoming])
 
   const rowClass = isFailed ? styles.rowFailed : isIncoming ? styles.rowIncoming : isSuccess ? styles.rowSuccess : styles.rowPending
-  const stateLabel = isSuccess ? '✓' : isFailed ? 'FAIL' : 'PEND'
-  const stateClass = isFailed ? styles.stateFail : isSuccess ? styles.stateOk : styles.statePend
+  const { label: stateLabel, cls: stateClass } = stateDisplay(state)
 
   const desc = rssMeta?.episode || rssPayment?.message || tx.description || tx.memo || '—'
   const time = tx.created_at ? new Date(tx.created_at * 1000).toLocaleTimeString() : '—'
@@ -382,7 +378,7 @@ function TransactionRow({ tx }) {
 
   const actionType = rssMeta?.action || rssPayment?.action || null
   const typeLabel = actionType
-    ? `${actionType === 'boost' ? '🚀' : '🎵'} ${actionType.toUpperCase()}`
+    ? `${actionIcon(actionType)} ${actionType.toUpperCase()}`
     : tx.type === 'outgoing' ? '↑ OUT' : '↓ IN'
 
   return (
@@ -427,7 +423,7 @@ function TransactionRow({ tx }) {
               {rssMeta.recipient_name && <DetailRow label="Recipient" value={rssMeta.recipient_name} />}
               {rssMeta.app_name && <DetailRow label="App" value={rssMeta.app_version ? `${rssMeta.app_name} v${rssMeta.app_version}` : rssMeta.app_name} />}
               {rssMeta.message && <DetailRow label="Message" value={rssMeta.message} />}
-              {rssMeta.position != null && <DetailRow label="Position" value={`${Math.floor(rssMeta.position / 60)}:${String(rssMeta.position % 60).padStart(2, '0')}`} />}
+              {rssMeta.position != null && <DetailRow label="Position" value={formatPosition(rssMeta.position)} />}
               {rssMeta.value_msat_total != null && <DetailRow label="Total Boost" value={`${msatsToSats(rssMeta.value_msat_total)} sats`} />}
               {rssMeta.split != null && <DetailRow label="Split %" value={`${rssMeta.split}%`} />}
               {rssMeta.feed_guid && <DetailRow label="Feed GUID" value={rssMeta.feed_guid} mono />}
@@ -467,6 +463,23 @@ function DetailRow({ label, value, mono, error, highlight }) {
   )
 }
 
+function stateDisplay(state) {
+  return {
+    label: state === 'succeeded' ? '✓' : state === 'failed' ? 'FAIL' : 'PEND',
+    cls: state === 'failed' ? styles.stateFail : state === 'succeeded' ? styles.stateOk : styles.statePend,
+  }
+}
+
+function actionIcon(action) {
+  if (action === 'boost') return '🚀'
+  if (action === 'stream') return '🎵'
+  return '⚡'
+}
+
+function formatPosition(seconds) {
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
+}
+
 function parseV4V(metadata) {
   try {
     const tlv = metadata?.tlv_records?.find((r) => r.type === 7629169)
@@ -478,11 +491,6 @@ function parseV4V(metadata) {
   } catch {
     return null
   }
-}
-
-function parseV4VName(metadata) {
-  const v4v = parseV4V(metadata)
-  return v4v?.name || null
 }
 
 function parseRssPayment(description) {
