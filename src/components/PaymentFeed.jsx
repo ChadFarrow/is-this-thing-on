@@ -260,6 +260,7 @@ function TransactionRow({ tx }) {
   const [destAlias, setDestAlias] = useState(null)
   const [destPubkey, setDestPubkey] = useState(null)
   const [decoded, setDecoded] = useState(false)
+  const [rssMeta, setRssMeta] = useState(null)
 
   const state = normalizeState(tx.state)
   const isFailed = state === 'failed'
@@ -297,21 +298,35 @@ function TransactionRow({ tx }) {
     return () => { cancelled = true }
   }, [tx.invoice, tx.metadata])
 
+  // Fetch metadata from rss::payment URL (e.g. Castamatic boost URLs)
+  const rssPayment = parseRssPayment(tx.description || tx.memo)
+  useEffect(() => {
+    if (!rssPayment?.url) return
+    let cancelled = false
+    fetchRssPaymentMeta(rssPayment.url).then((meta) => {
+      if (!cancelled && meta) {
+        setRssMeta(meta)
+        if (!destAlias && meta.podcast) setDestAlias(meta.podcast)
+      }
+    })
+    return () => { cancelled = true }
+  }, [rssPayment?.url])
+
   const isIncoming = tx.type === 'incoming'
   const rowClass = isFailed ? styles.rowFailed : isIncoming ? styles.rowIncoming : isSuccess ? styles.rowSuccess : styles.rowPending
   const stateLabel = isSuccess ? '✓' : isFailed ? 'FAIL' : 'PEND'
   const stateClass = isFailed ? styles.stateFail : isSuccess ? styles.stateOk : styles.statePend
 
-  const rssPayment = parseRssPayment(tx.description || tx.memo)
-  const desc = rssPayment?.message || tx.description || tx.memo || '—'
+  const desc = rssMeta?.episode || rssPayment?.message || tx.description || tx.memo || '—'
   const time = tx.created_at ? new Date(tx.created_at * 1000).toLocaleTimeString() : '—'
   // Fallback: extract hostname from rss::payment description if no destination resolved
   const destDisplay = destAlias
     ?? (destPubkey ? shortPubkey(destPubkey) : null)
     ?? (rssPayment?.url ? new URL(rssPayment.url).hostname.replace(/^www\./, '') : null)
 
-  const typeLabel = rssPayment
-    ? `${rssPayment.action === 'boost' ? '🚀' : '🎵'} ${rssPayment.action.toUpperCase()}`
+  const actionType = rssMeta?.action || rssPayment?.action || null
+  const typeLabel = actionType
+    ? `${actionType === 'boost' ? '🚀' : '🎵'} ${actionType.toUpperCase()}`
     : tx.type === 'outgoing' ? '↑ OUT' : '↓ IN'
 
   return (
@@ -348,7 +363,22 @@ function TransactionRow({ tx }) {
 
       {expanded && (
         <div className={styles.detail}>
-          {destAlias && <DetailRow label="Node Alias" value={destAlias} highlight />}
+          {rssMeta && (
+            <>
+              {rssMeta.podcast && <DetailRow label="Podcast" value={rssMeta.podcast} highlight />}
+              {rssMeta.episode && <DetailRow label="Episode" value={rssMeta.episode} />}
+              {rssMeta.sender_name && <DetailRow label="Sender" value={rssMeta.sender_name} />}
+              {rssMeta.recipient_name && <DetailRow label="Recipient" value={rssMeta.recipient_name} />}
+              {rssMeta.app_name && <DetailRow label="App" value={rssMeta.app_version ? `${rssMeta.app_name} v${rssMeta.app_version}` : rssMeta.app_name} />}
+              {rssMeta.message && <DetailRow label="Message" value={rssMeta.message} />}
+              {rssMeta.position != null && <DetailRow label="Position" value={`${Math.floor(rssMeta.position / 60)}:${String(rssMeta.position % 60).padStart(2, '0')}`} />}
+              {rssMeta.value_msat_total != null && <DetailRow label="Total Boost" value={`${msatsToSats(rssMeta.value_msat_total)} sats`} />}
+              {rssMeta.split != null && <DetailRow label="Split %" value={`${rssMeta.split}%`} />}
+              {rssMeta.feed_guid && <DetailRow label="Feed GUID" value={rssMeta.feed_guid} mono />}
+              {rssMeta.item_guid && <DetailRow label="Item GUID" value={rssMeta.item_guid} mono />}
+            </>
+          )}
+          {destAlias && !rssMeta?.podcast && <DetailRow label="Node Alias" value={destAlias} highlight />}
           {destPubkey && <DetailRow label="Dest Pubkey" value={destPubkey} mono />}
           <DetailRow label="Payment Hash" value={tx.payment_hash || '—'} mono />
           <DetailRow label="State" value={tx.state || '—'} />
@@ -404,6 +434,74 @@ function parseRssPayment(description) {
   const match = description.match(/^rss::payment::(boost|stream)\s+(https?:\/\/\S+)\s*(.*)$/)
   if (!match) return null
   return { action: match[1], url: match[2], message: match[3] || null }
+}
+
+const rssMetaCache = new Map()
+
+function fetchRssPaymentMeta(url) {
+  if (!url) return Promise.resolve(null)
+  if (rssMetaCache.has(url)) return Promise.resolve(rssMetaCache.get(url))
+
+  return fetch(url)
+    .then((res) => {
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      return res.text()
+    })
+    .then((body) => {
+      let meta = null
+      const trimmed = body.trim()
+
+      // Try JSON first (e.g. Castamatic boost URLs return JSON with V4V metadata)
+      if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+        try {
+          const json = JSON.parse(trimmed)
+          meta = {
+            podcast: json.feed_title || json.podcast || null,
+            episode: json.item_title || json.episode || null,
+            action: json.action || null,
+            sender_name: json.sender_name || null,
+            app_name: json.app_name || null,
+            app_version: json.app_version || null,
+            recipient_name: json.recipient_name || json.name || null,
+            recipient_address: json.recipient_address || null,
+            message: json.message || null,
+            feed_guid: json.feed_guid || null,
+            item_guid: json.item_guid || null,
+            position: json.position || null,
+            split: json.split || null,
+            value_msat: json.value_msat || null,
+            value_msat_total: json.value_msat_total || null,
+            feedUrl: url,
+          }
+        } catch { /* fall through to RSS parsing */ }
+      }
+
+      // Fall back to RSS XML parsing
+      if (!meta) {
+        const doc = new DOMParser().parseFromString(trimmed, 'text/xml')
+        const channel = doc.querySelector('channel')
+        if (channel) {
+          const text = (tag) => channel.querySelector(tag)?.textContent?.trim() || null
+          const itunesAuthor = channel.getElementsByTagName('itunes:author')[0]?.textContent?.trim() || null
+          meta = {
+            podcast: text('title'),
+            episode: null,
+            action: null,
+            sender_name: null,
+            app_name: null,
+            recipient_name: itunesAuthor || text('managingEditor'),
+            feedUrl: url,
+          }
+        }
+      }
+
+      rssMetaCache.set(url, meta)
+      return meta
+    })
+    .catch(() => {
+      rssMetaCache.set(url, null)
+      return null
+    })
 }
 
 function normalizeState(state) {
