@@ -252,7 +252,7 @@ function GroupRow({ group }) {
           <span className={styles.typeTag}>{actionIcon} {v4v.action?.toUpperCase() || '—'}</span>
         </div>
         <div className={`${styles.cell} ${styles.destCell} ${styles.cellDest}`}>
-          <span className={styles.destAlias}>{v4v.rssMeta ? (v4v.rssMeta.recipient_name || v4v.podcast || '—') : (v4v.podcast || '—')}</span>
+          <span className={styles.destAlias}>{v4v.podcast || '—'}</span>
         </div>
         <div className={`${styles.cell} ${styles.descCell} ${styles.cellDesc}`}>
           {v4v.rssMeta ? (v4v.episode || v4v.message || '—') : (v4v.message || v4v.episode || '—')}
@@ -310,38 +310,47 @@ function TransactionRow({ tx }) {
   const state = normalizeState(tx.state)
   const isFailed = state === 'failed'
   const isSuccess = state === 'succeeded'
+  const isIncoming = tx.type === 'incoming'
 
   useEffect(() => {
     let cancelled = false
-    // Try V4V TLV name first
-    const v4vName = parseV4VName(tx.metadata)
-    if (v4vName) {
-      setDestAlias(v4vName)
-    }
+    const v4v = parseV4V(tx.metadata)
 
-    // Try multiple sources for the destination pubkey
-    const pubkey = decodeBolt11(tx.invoice)
-      || tx.metadata?.destination
-      || tx.metadata?.pubkey
-      || tx.destination
-      || null
+    if (isIncoming) {
+      // For incoming payments, show sender info (not the destination, which is our own node)
+      const senderName = v4v?.sender_name || v4v?.app_name || null
+      if (senderName) setDestAlias(senderName)
+      setDecoded(true)
+    } else {
+      // For outgoing payments, show the recipient
+      const v4vName = v4v?.name || null
+      if (v4vName) {
+        setDestAlias(v4vName)
+      }
 
-    if (pubkey) {
-      setDestPubkey(pubkey)
-      if (!v4vName) {
-        lookupNodeAlias(pubkey).then((alias) => {
-          if (!cancelled) { setDestAlias(alias); setDecoded(true) }
-        })
+      // Try multiple sources for the destination pubkey
+      const pubkey = decodeBolt11(tx.invoice)
+        || tx.metadata?.destination
+        || tx.metadata?.pubkey
+        || tx.destination
+        || null
+
+      if (pubkey) {
+        setDestPubkey(pubkey)
+        if (!v4vName) {
+          lookupNodeAlias(pubkey).then((alias) => {
+            if (!cancelled) { setDestAlias(alias); setDecoded(true) }
+          })
+        } else {
+          setDecoded(true)
+        }
       } else {
         setDecoded(true)
       }
-    } else {
-      // No destination available — expected for keysends without V4V TLV metadata
-      setDecoded(true)
     }
 
     return () => { cancelled = true }
-  }, [tx.invoice, tx.metadata])
+  }, [tx.invoice, tx.metadata, isIncoming])
 
   // Fetch metadata from rss::payment URL (e.g. Castamatic boost URLs)
   const rssPayment = parseRssPayment(tx.description || tx.memo)
@@ -351,13 +360,15 @@ function TransactionRow({ tx }) {
     fetchRssPaymentMeta(rssPayment.url).then((meta) => {
       if (!cancelled && meta) {
         setRssMeta(meta)
-        if (!destAlias && meta.recipient_name) setDestAlias(meta.recipient_name)
+        if (!destAlias) {
+          const name = isIncoming ? (meta.sender_name || meta.podcast) : meta.recipient_name
+          if (name) setDestAlias(name)
+        }
       }
     })
     return () => { cancelled = true }
   }, [rssPayment?.url])
 
-  const isIncoming = tx.type === 'incoming'
   const rowClass = isFailed ? styles.rowFailed : isIncoming ? styles.rowIncoming : isSuccess ? styles.rowSuccess : styles.rowPending
   const stateLabel = isSuccess ? '✓' : isFailed ? 'FAIL' : 'PEND'
   const stateClass = isFailed ? styles.stateFail : isSuccess ? styles.stateOk : styles.statePend
