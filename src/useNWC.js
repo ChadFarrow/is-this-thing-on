@@ -99,9 +99,11 @@ export function useNWC(nwcUri, pollIntervalMs = 5000) {
       }
 
       // Try to load history via list_transactions
+      // Include unpaid/failed outgoing payments so failed splits are visible
+      const listParams = { limit: 50, unpaid: true, unpaid_outgoing: true, unpaid_incoming: true }
       if (hasList) {
         try {
-          const resp = await client.listTransactions({ limit: 50 })
+          const resp = await client.listTransactions(listParams)
           mergeTx(resp.transactions ?? [])
         } catch (e) {
           // Fall through to notifications
@@ -111,7 +113,7 @@ export function useNWC(nwcUri, pollIntervalMs = 5000) {
         clearInterval(pollTimerRef.current)
         pollTimerRef.current = setInterval(async () => {
           try {
-            const resp = await client.listTransactions({ limit: 50 })
+            const resp = await client.listTransactions(listParams)
             mergeTx(resp.transactions ?? [])
           } catch (e) {
             console.warn('[NWC] Poll error:', e.message)
