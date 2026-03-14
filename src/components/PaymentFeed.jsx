@@ -306,7 +306,7 @@ function TransactionRow({ tx }) {
     fetchRssPaymentMeta(rssPayment.url).then((meta) => {
       if (!cancelled && meta) {
         setRssMeta(meta)
-        if (!destAlias && meta.podcast) setDestAlias(meta.podcast)
+        if (!destAlias && meta.sender_name) setDestAlias(meta.sender_name)
       }
     })
     return () => { cancelled = true }
