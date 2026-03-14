@@ -8,6 +8,34 @@ const STATE_FILTERS = ['all', 'failed', 'succeeded', 'pending']
 export default function PaymentFeed({ transactions, lastUpdated }) {
   const [filter, setFilter] = useState('all')
   const [typeFilter, setTypeFilter] = useState('all')
+  const [rssMetaMap, setRssMetaMap] = useState(new Map())
+
+  // Fetch metadata for all rss::payment URLs in transactions
+  useEffect(() => {
+    const urls = new Set()
+    transactions.forEach((tx) => {
+      const rss = parseRssPayment(tx.description || tx.memo)
+      if (rss?.url) urls.add(rss.url)
+    })
+    if (urls.size === 0) return
+
+    let cancelled = false
+    const promises = [...urls].map((url) =>
+      fetchRssPaymentMeta(url).then((meta) => [url, meta])
+    )
+    Promise.all(promises).then((results) => {
+      if (cancelled) return
+      const map = new Map()
+      for (const [url, meta] of results) {
+        if (meta) map.set(url, meta)
+      }
+      setRssMetaMap((prev) => {
+        if (map.size === 0 && prev.size === 0) return prev
+        return new Map([...prev, ...map])
+      })
+    })
+    return () => { cancelled = true }
+  }, [transactions])
 
   const counts = useMemo(() => {
     const c = { all: 0, failed: 0, succeeded: 0, pending: 0 }
@@ -34,27 +62,41 @@ export default function PaymentFeed({ transactions, lastUpdated }) {
     const groups = new Map()
     const ungrouped = []
 
-    // Group by V4V metadata: use ts when present, fall back to time-proximity clustering
+    // Group by V4V metadata or rss::payment metadata
     const needsClustering = new Map()
     filtered.forEach((tx) => {
       const v4v = parseV4V(tx.metadata)
-      if (!v4v || !v4v.action) {
-        ungrouped.push({ type: 'tx', tx })
+      if (v4v && v4v.action) {
+        if (v4v.ts) {
+          const key = `${v4v.action}|${v4v.podcast || ''}|${v4v.episode || ''}|${v4v.ts}`
+          if (!groups.has(key)) groups.set(key, { type: 'group', key, v4v, splits: [], time: 0 })
+          const group = groups.get(key)
+          group.splits.push({ tx, v4v })
+          group.time = Math.max(group.time, tx.created_at || 0)
+        } else {
+          const contextKey = `${v4v.action}|${v4v.podcast || ''}|${v4v.episode || ''}`
+          if (!needsClustering.has(contextKey)) needsClustering.set(contextKey, [])
+          needsClustering.get(contextKey).push({ tx, v4v })
+        }
         return
       }
-      if (v4v.ts) {
-        // ts present (e.g. boosts): group directly by metadata
-        const key = `${v4v.action}|${v4v.podcast || ''}|${v4v.episode || ''}|${v4v.ts}`
-        if (!groups.has(key)) groups.set(key, { type: 'group', key, v4v, splits: [], time: 0 })
-        const group = groups.get(key)
-        group.splits.push({ tx, v4v })
-        group.time = Math.max(group.time, tx.created_at || 0)
-      } else {
-        // no ts (e.g. streams): collect for time-proximity clustering
-        const contextKey = `${v4v.action}|${v4v.podcast || ''}|${v4v.episode || ''}`
+
+      // Check for rss::payment with fetched metadata
+      const rss = parseRssPayment(tx.description || tx.memo)
+      const meta = rss?.url ? rssMetaMap.get(rss.url) : null
+      if (meta && (meta.action || rss.action)) {
+        const action = meta.action || rss.action
+        const podcast = meta.podcast || ''
+        const episode = meta.episode || ''
+        const asV4v = { action, podcast, episode, sender_name: meta.sender_name, app_name: meta.app_name, message: meta.message, rssMeta: meta }
+        // Use time-proximity clustering for incoming rss::payment splits
+        const contextKey = `rss|${action}|${podcast}|${episode}`
         if (!needsClustering.has(contextKey)) needsClustering.set(contextKey, [])
-        needsClustering.get(contextKey).push({ tx, v4v })
+        needsClustering.get(contextKey).push({ tx, v4v: asV4v })
+        return
       }
+
+      ungrouped.push({ type: 'tx', tx })
     })
 
     // Time-proximity clustering for payments without ts
@@ -103,7 +145,7 @@ export default function PaymentFeed({ transactions, lastUpdated }) {
 
     result.sort((a, b) => (b.sortTime || 0) - (a.sortTime || 0))
     return result
-  }, [filtered])
+  }, [filtered, rssMetaMap])
 
   if (transactions.length === 0) {
     return (
@@ -210,10 +252,10 @@ function GroupRow({ group }) {
           <span className={styles.typeTag}>{actionIcon} {v4v.action?.toUpperCase() || '—'}</span>
         </div>
         <div className={`${styles.cell} ${styles.destCell} ${styles.cellDest}`}>
-          <span className={styles.destAlias}>{v4v.podcast || '—'}</span>
+          <span className={styles.destAlias}>{v4v.rssMeta ? (v4v.sender_name || v4v.podcast || '—') : (v4v.podcast || '—')}</span>
         </div>
         <div className={`${styles.cell} ${styles.descCell} ${styles.cellDesc}`}>
-          {v4v.message || v4v.episode || '—'}
+          {v4v.rssMeta ? (v4v.episode || v4v.message || '—') : (v4v.message || v4v.episode || '—')}
         </div>
         <div className={`${styles.cell} ${styles.cellAmount}`}>
           <span className={styles.amount}>{totalSats} <span className={styles.unit}>sats</span></span>
@@ -230,8 +272,11 @@ function GroupRow({ group }) {
         <div className={styles.groupDetail}>
           <div className={styles.groupMeta}>
             {v4v.sender_name && <span>From: <strong>{v4v.sender_name}</strong></span>}
-            {v4v.app_name && <span>via {v4v.app_name}</span>}
+            {v4v.app_name && <span>via {v4v.app_name}{v4v.rssMeta?.app_version ? ` v${v4v.rssMeta.app_version}` : ''}</span>}
+            {v4v.podcast && <span>Podcast: {v4v.podcast}</span>}
             {v4v.episode && <span>Episode: {v4v.episode}</span>}
+            {v4v.rssMeta?.position != null && <span>Position: {Math.floor(v4v.rssMeta.position / 60)}:{String(v4v.rssMeta.position % 60).padStart(2, '0')}</span>}
+            {v4v.message && <span>Message: {v4v.message}</span>}
           </div>
           <div className={styles.splitList}>
             {splits.map((s, i) => {
@@ -241,7 +286,7 @@ function GroupRow({ group }) {
               return (
                 <div key={s.tx.payment_hash ?? i} className={`${styles.splitRow} ${state === 'failed' ? styles.splitRowFailed : ''}`}>
                   <span className={`${styles.stateTag} ${stateClass}`} style={{ width: '50px', textAlign: 'center' }}>{stateLabel}</span>
-                  <span className={styles.splitName}>{s.v4v?.name || '—'}</span>
+                  <span className={styles.splitName}>{s.v4v?.name || s.v4v?.rssMeta?.recipient_name || '—'}</span>
                   <span className={styles.splitAmount}>{msatsToSats(s.tx.amount)} sats</span>
                   <span className={styles.splitFees}>{s.tx.fees_paid !== undefined ? `${msatsToSats(s.tx.fees_paid)} fee` : ''}</span>
                   {s.tx.error_message && <span className={styles.splitError}>{s.tx.error_message}</span>}
