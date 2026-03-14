@@ -151,3 +151,35 @@
   border-color: var(--fail);
   color: var(--fail);
 }
+
+@media (max-width: 600px) {
+  .card {
+    padding: 16px;
+  }
+
+  .input {
+    font-size: 14px;
+    padding: 12px 40px 12px 12px;
+  }
+
+  .connectBtn {
+    padding: 14px 20px;
+    font-size: 14px;
+    min-height: 48px;
+  }
+
+  .disconnectBtn {
+    padding: 10px 14px;
+    min-height: 44px;
+  }
+
+  .toggleBtn {
+    font-size: 18px;
+    padding: 4px;
+  }
+
+  .connectedRow {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+}

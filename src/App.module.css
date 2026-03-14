@@ -145,13 +145,52 @@
 }
 
 @media (max-width: 600px) {
-  .main {
-    padding: 16px;
+  .header {
+    padding: 12px 12px;
+    gap: 8px;
   }
+
+  .logo {
+    gap: 8px;
+  }
+
+  .bolt {
+    font-size: 18px;
+  }
+
   .title {
     font-size: 13px;
+    letter-spacing: 0.08em;
   }
+
   .subtitle {
     display: none;
+  }
+
+  .headerRight {
+    gap: 6px;
+  }
+
+  .failAlert {
+    font-size: 10px;
+    padding: 3px 6px;
+    gap: 4px;
+  }
+
+  .pollBadge {
+    font-size: 9px;
+    padding: 3px 6px;
+  }
+
+  .main {
+    padding: 12px;
+    gap: 14px;
+  }
+
+  .footer {
+    padding: 10px 12px;
+    font-size: 9px;
+    flex-wrap: wrap;
+    gap: 4px;
   }
 }

@@ -158,13 +158,13 @@ export default function PaymentFeed({ transactions, lastUpdated }) {
 
       <div className={styles.table}>
         <div className={styles.thead}>
-          <div className={styles.col} style={{ width: '70px' }}>STATE</div>
-          <div className={styles.col} style={{ width: '80px' }}>TYPE</div>
-          <div className={styles.col} style={{ flex: 1, minWidth: 0 }}>DESTINATION</div>
-          <div className={styles.col} style={{ flex: 1, minWidth: 0 }}>DESCRIPTION</div>
-          <div className={styles.col} style={{ width: '90px', textAlign: 'right' }}>AMOUNT</div>
-          <div className={styles.col} style={{ width: '70px', textAlign: 'right' }}>FEES</div>
-          <div className={styles.col} style={{ width: '130px', textAlign: 'right' }}>TIME</div>
+          <div className={`${styles.col} ${styles.colState}`}>STATE</div>
+          <div className={`${styles.col} ${styles.colType}`}>TYPE</div>
+          <div className={`${styles.col} ${styles.colDest}`}>DESTINATION</div>
+          <div className={`${styles.col} ${styles.colDesc}`}>DESCRIPTION</div>
+          <div className={`${styles.col} ${styles.colAmount}`}>AMOUNT</div>
+          <div className={`${styles.col} ${styles.colFees}`}>FEES</div>
+          <div className={`${styles.col} ${styles.colTime}`}>TIME</div>
         </div>
         <div className={styles.tbody}>
           {grouped.length === 0 ? (
@@ -201,27 +201,27 @@ function GroupRow({ group }) {
   return (
     <>
       <div className={`${styles.row} ${groupRowClass}`} onClick={() => setExpanded(!expanded)}>
-        <div className={styles.cell} style={{ width: '70px' }}>
+        <div className={`${styles.cell} ${styles.cellState}`}>
           <span className={`${styles.stateTag} ${ratioClass}`}>
             {succeededCount}/{total} {allOk ? '✓' : hasFails ? '!' : '…'}
           </span>
         </div>
-        <div className={styles.cell} style={{ width: '80px' }}>
+        <div className={`${styles.cell} ${styles.cellType}`}>
           <span className={styles.typeTag}>{actionIcon} {v4v.action?.toUpperCase() || '—'}</span>
         </div>
-        <div className={`${styles.cell} ${styles.destCell}`} style={{ flex: 1, minWidth: 0 }}>
+        <div className={`${styles.cell} ${styles.destCell} ${styles.cellDest}`}>
           <span className={styles.destAlias}>{v4v.podcast || '—'}</span>
         </div>
-        <div className={`${styles.cell} ${styles.descCell}`} style={{ flex: 1, minWidth: 0 }}>
+        <div className={`${styles.cell} ${styles.descCell} ${styles.cellDesc}`}>
           {v4v.message || v4v.episode || '—'}
         </div>
-        <div className={styles.cell} style={{ width: '90px', textAlign: 'right' }}>
+        <div className={`${styles.cell} ${styles.cellAmount}`}>
           <span className={styles.amount}>{totalSats} <span className={styles.unit}>sats</span></span>
         </div>
-        <div className={styles.cell} style={{ width: '70px', textAlign: 'right', color: 'var(--text-dim)' }}>
+        <div className={`${styles.cell} ${styles.cellFees}`}>
           {totalFees > 0 ? msatsToSats(totalFees) : '—'}
         </div>
-        <div className={styles.cell} style={{ width: '130px', textAlign: 'right', color: 'var(--text-dim)', fontSize: '11px' }}>
+        <div className={`${styles.cell} ${styles.cellTime}`}>
           {expanded ? '▾' : '▸'} {time}
         </div>
       </div>
@@ -299,13 +299,13 @@ function TransactionRow({ tx }) {
   return (
     <>
       <div className={`${styles.row} ${rowClass}`} onClick={() => setExpanded(!expanded)}>
-        <div className={styles.cell} style={{ width: '70px' }}>
+        <div className={`${styles.cell} ${styles.cellState}`}>
           <span className={`${styles.stateTag} ${stateClass}`}>{stateLabel}</span>
         </div>
-        <div className={styles.cell} style={{ width: '80px' }}>
+        <div className={`${styles.cell} ${styles.cellType}`}>
           <span className={styles.typeTag}>{typeLabel}</span>
         </div>
-        <div className={`${styles.cell} ${styles.destCell}`} style={{ flex: 1, minWidth: 0 }}>
+        <div className={`${styles.cell} ${styles.destCell} ${styles.cellDest}`}>
           {destDisplay ? (
             <span className={styles.destAlias} title={destPubkey}>{destDisplay}</span>
           ) : tx.type === 'outgoing' ? (
@@ -314,16 +314,16 @@ function TransactionRow({ tx }) {
             <span className={styles.destUnknown}>—</span>
           )}
         </div>
-        <div className={`${styles.cell} ${styles.descCell}`} style={{ flex: 1, minWidth: 0 }}>
+        <div className={`${styles.cell} ${styles.descCell} ${styles.cellDesc}`}>
           {desc}
         </div>
-        <div className={styles.cell} style={{ width: '90px', textAlign: 'right' }}>
+        <div className={`${styles.cell} ${styles.cellAmount}`}>
           <span className={styles.amount}>{msatsToSats(tx.amount)} <span className={styles.unit}>sats</span></span>
         </div>
-        <div className={styles.cell} style={{ width: '70px', textAlign: 'right', color: 'var(--text-dim)' }}>
+        <div className={`${styles.cell} ${styles.cellFees}`}>
           {tx.fees_paid !== undefined ? msatsToSats(tx.fees_paid) : '—'}
         </div>
-        <div className={styles.cell} style={{ width: '130px', textAlign: 'right', color: 'var(--text-dim)', fontSize: '11px' }}>
+        <div className={`${styles.cell} ${styles.cellTime}`}>
           {time}
         </div>
       </div>
