@@ -82,6 +82,22 @@
   font-style: italic;
 }
 
+.clearBtn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+.clearBtn:hover {
+  border-color: var(--text-dim);
+  color: var(--text);
+}
+
 .failBanner {
   display: flex;
   align-items: center;
